@@ -2,7 +2,11 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import json
+import numpy as np
+from sklearn.metrics import confusion_matrix
+from sklearn.ensemble import RandomForestClassifier
 
 # Load datasets
 raw_data_path = "https://raw.githubusercontent.com/amithisnew/FDS_VA/refs/heads/main/raw_data_dementia.csv"
@@ -34,66 +38,55 @@ for col in selected_data.select_dtypes(include=["object", "int64", "float64"]).c
 # Section 2: Model Performance Metrics
 st.header("2. Model Performance Metrics")
 
-# Classification report for raw data
-raw_report_json = """
-{
-    "0": {"precision": 0.73, "recall": 0.98, "f1-score": 0.84, "support": 332},
-    "1": {"precision": 0.50, "recall": 0.05, "f1-score": 0.09, "support": 127},
-    "accuracy": 0.7233115468409586,
-    "macro avg": {"precision": 0.61, "recall": 0.51, "f1-score": 0.46, "support": 459},
-    "weighted avg": {"precision": 0.67, "recall": 0.72, "f1-score": 0.63, "support": 459}
-}
-"""
+# Extract features and target for preprocessed data
+X_preprocessed = df_preprocessed.drop(columns=['Dementia_Label'])  # Features
+y_preprocessed = df_preprocessed['Dementia_Label']  # Target
 
-# Classification report for preprocessed data
-preprocessed_report_json = """
-{
-    "0": {"precision": 0.78, "recall": 0.87, "f1-score": 0.82, "support": 343},
-    "1": {"precision": 0.84, "recall": 0.75, "f1-score": 0.79, "support": 326},
-    "accuracy": 0.8071748878923767,
-    "macro avg": {"precision": 0.81, "recall": 0.81, "f1-score": 0.81, "support": 669},
-    "weighted avg": {"precision": 0.81, "recall": 0.81, "f1-score": 0.81, "support": 669}
-}
-"""
+# Train RandomForestClassifier on the preprocessed data (assuming it's already trained)
+model = RandomForestClassifier()
+model.fit(X_preprocessed, y_preprocessed)
 
-# Load JSON reports from strings
-try:
-    raw_report = json.loads(raw_report_json)
-    preprocessed_report = json.loads(preprocessed_report_json)
-except Exception as e:
-    st.error(f"Error parsing classification reports: {e}")
-    st.stop()
+# Make predictions
+y_pred = model.predict(X_preprocessed)
 
-# Display metrics for raw data
-st.write("### Training Metrics (Raw Data)")
-raw_metrics = ["precision", "recall", "f1-score"]
-raw_metric_data = {metric: [raw_report[str(i)][metric] for i in range(2)] for metric in raw_metrics}
-raw_metric_data["Class"] = ["Class 0", "Class 1"]
+# Compute confusion matrix
+cm = confusion_matrix(y_preprocessed, y_pred)
 
-raw_df_metrics = pd.DataFrame(raw_metric_data)
-fig = px.bar(raw_df_metrics, x="Class", y=raw_metrics, barmode="group", title="Classification Metrics for Raw Data")
-st.plotly_chart(fig, use_container_width=True)
+# Visualization of the confusion matrix
+fig = go.Figure(data=go.Heatmap(z=cm, x=['Class 0', 'Class 1'], y=['Class 0', 'Class 1'],
+                                colorscale='Viridis', colorbar=dict(title='Count')))
+fig.update_layout(title='Confusion Matrix', xaxis_title='Predicted', yaxis_title='Actual')
+st.plotly_chart(fig)
 
-# Display metrics for preprocessed data
-st.write("### Training Metrics (Preprocessed Data)")
-preprocessed_metrics = ["precision", "recall", "f1-score"]
-preprocessed_metric_data = {metric: [preprocessed_report[str(i)][metric] for i in range(2)] for metric in preprocessed_metrics}
-preprocessed_metric_data["Class"] = ["Class 0", "Class 1"]
+# Calculate precision, recall, F1-score from the confusion matrix
+precision_class_0 = cm[0, 0] / (cm[0, 0] + cm[0, 1])  # TP / (TP + FP)
+precision_class_1 = cm[1, 1] / (cm[1, 1] + cm[1, 0])  # TP / (TP + FP)
+recall_class_0 = cm[0, 0] / (cm[0, 0] + cm[1, 0])  # TP / (TP + FN)
+recall_class_1 = cm[1, 1] / (cm[1, 1] + cm[0, 1])  # TP / (TP + FN)
+f1_class_0 = 2 * (precision_class_0 * recall_class_0) / (precision_class_0 + recall_class_0)
+f1_class_1 = 2 * (precision_class_1 * recall_class_1) / (precision_class_1 + recall_class_1)
+accuracy = (cm[0, 0] + cm[1, 1]) / cm.sum()
 
-preprocessed_df_metrics = pd.DataFrame(preprocessed_metric_data)
-fig = px.bar(preprocessed_df_metrics, x="Class", y=preprocessed_metrics, barmode="group", title="Classification Metrics for Preprocessed Data")
-st.plotly_chart(fig, use_container_width=True)
+# Display precision, recall, and F1-score metrics
+st.write(f"### Metrics based on Confusion Matrix")
+st.write(f"**Precision for Class 0**: {precision_class_0:.2f}")
+st.write(f"**Precision for Class 1**: {precision_class_1:.2f}")
+st.write(f"**Recall for Class 0**: {recall_class_0:.2f}")
+st.write(f"**Recall for Class 1**: {recall_class_1:.2f}")
+st.write(f"**F1-Score for Class 0**: {f1_class_0:.2f}")
+st.write(f"**F1-Score for Class 1**: {f1_class_1:.2f}")
+st.write(f"**Accuracy**: {accuracy:.2f}")
 
 # Section 3: Model Comparison
 st.header("3. Model Comparison")
 
-# Model comparison table
+# Model comparison table (update with actual results)
 comparison_data = {
     "Model": ["Raw Data", "Preprocessed Data"],
-    "Accuracy": [0.7233, 0.8072],
-    "Precision": [0.67, 0.81],
-    "Recall": [0.72, 0.81],
-    "F1-Score": [0.63, 0.81]
+    "Accuracy": [0.7233, accuracy],  # Replace with real accuracy value
+    "Precision": [0.67, precision_class_1],  # Replace with real precision
+    "Recall": [0.72, recall_class_1],  # Replace with real recall
+    "F1-Score": [0.63, f1_class_1],  # Replace with real F1 score
 }
 df_comparison = pd.DataFrame(comparison_data)
 
