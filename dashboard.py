@@ -80,13 +80,13 @@ st.write(f"**Accuracy**: {accuracy:.2f}")
 # Section 3: Model Comparison
 st.header("3. Model Comparison")
 
-# Model comparison table (update with actual results)
+# Model comparison table with the provided metrics
 comparison_data = {
     "Model": ["Raw Data", "Preprocessed Data"],
-    "Accuracy": [0.7233, accuracy],  # Replace with real accuracy value
-    "Precision": [0.67, precision_class_1],  # Replace with real precision
-    "Recall": [0.72, recall_class_1],  # Replace with real recall
-    "F1-Score": [0.63, f1_class_1],  # Replace with real F1 score
+    "Accuracy": [0.7233, 0.8072],  # Accuracy before and after preprocessing
+    "Precision": [0.50, 0.84],  # Precision for Class 1 before and after preprocessing
+    "Recall": [0.05, 0.75],  # Recall for Class 1 before and after preprocessing
+    "F1-Score": [0.09, 0.79],  # F1-Score for Class 1 before and after preprocessing
 }
 df_comparison = pd.DataFrame(comparison_data)
 
@@ -104,6 +104,6 @@ st.header("4. Insights")
 st.markdown("""
 - **Raw Data**: The model's performance on raw data shows an accuracy of 72.33%. However, the recall for Class 1 is very low (5%), indicating significant imbalance.
 - **Preprocessed Data**: After preprocessing, the accuracy improves to 80.72%, and the metrics for Class 1 improve significantly, demonstrating balanced performance.
-- **Significance**: Preprocessing has markedly improved the model's performance, especially for the minority class (Class 1). The balanced precision and recall result in a higher overall f1-score.
+- **Significance**: Preprocessing has markedly improved the model's performance, especially for the minority class (Class 1). The balanced precision and recall result in a higher overall F1-score.
 - Use the bar charts and tables above to analyze and compare performance metrics interactively.
 """)
