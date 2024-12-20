@@ -23,45 +23,48 @@ except Exception as e:
 st.title("Dementia Prediction System Dashboard")
 st.sidebar.title("Options")
 
-# --- Preprocessing for Raw Data (for Confusion Matrix) ---
-X_raw = df_raw.drop(columns=['Patient_ID', 'Dementia_Label'])
+# --- Preprocessing and Prediction for Raw Data (for Confusion Matrix) ---
+X_raw = df_raw.drop(columns=['Patient_ID', 'Dementia_Label'], errors='ignore')  # Handle potential missing columns
 y_raw = df_raw['Dementia_Label']
 
 num_features_raw = X_raw.select_dtypes(include=[np.number]).columns
 cat_features_raw = X_raw.select_dtypes(include=[object]).columns
 
-# Impute
-num_imputer_raw = SimpleImputer(strategy='median')
-X_raw[num_features_raw] = num_imputer_raw.fit_transform(X_raw[num_features_raw])
-cat_imputer_raw = SimpleImputer(strategy='most_frequent')
-X_raw[cat_features_raw] = cat_imputer_raw.fit_transform(X_raw[cat_features_raw])
+if not num_features_raw.empty:  # Check if there are numerical features
+    num_imputer_raw = SimpleImputer(strategy='median')
+    X_raw[num_features_raw] = num_imputer_raw.fit_transform(X_raw[num_features_raw])
+    scaler_raw = StandardScaler()
+    X_raw[num_features_raw] = scaler_raw.fit_transform(X_raw[num_features_raw])
 
-# Scale
-scaler_raw = StandardScaler()
-X_raw[num_features_raw] = scaler_raw.fit_transform(X_raw[num_features_raw])
-
-# Encode
-encoder_raw = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-X_encoded_raw = pd.DataFrame(encoder_raw.fit_transform(X_raw[cat_features_raw]), columns=encoder_raw.get_feature_names_out(cat_features_raw))
-X_raw = X_raw.drop(cat_features_raw, axis=1)
-X_raw = pd.concat([X_raw, X_encoded_raw], axis=1)
-
+if not cat_features_raw.empty: # Check if there are categorical features
+    cat_imputer_raw = SimpleImputer(strategy='most_frequent')
+    X_raw[cat_features_raw] = cat_imputer_raw.fit_transform(X_raw[cat_features_raw])
+    encoder_raw = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+    X_encoded_raw = pd.DataFrame(encoder_raw.fit_transform(X_raw[cat_features_raw]), columns=encoder_raw.get_feature_names_out(cat_features_raw))
+    X_raw = X_raw.drop(cat_features_raw, axis=1)
+    X_raw = pd.concat([X_raw, X_encoded_raw], axis=1)
 
 # --- Prediction for Raw Data (using a simple heuristic for demonstration) ---
-X_raw['prediction'] = X_raw.apply(lambda x: 1 if x.sum() > x.shape[0] / 2 else 0, axis=1)
+if not X_raw.empty: # Check if X_raw has any columns before applying lambda function
+    X_raw['prediction'] = X_raw.apply(lambda x: 1 if x.sum() > x.shape[0] / 2 else 0, axis=1)
+else:
+    X_raw['prediction'] = np.zeros(len(df_raw)) # create a dummy prediction column if X_raw is empty
 
-# --- Preprocessing for Preprocessed Data (for Confusion Matrix) ---
-X_preprocessed_cm = df_preprocessed.drop(columns=['Patient_ID', 'Dementia_Label'])
+# --- Preprocessing and Prediction for Preprocessed Data (for Confusion Matrix) ---
+X_preprocessed_cm = df_preprocessed.drop(columns=['Patient_ID', 'Dementia_Label'], errors='ignore') # Handle potential missing columns
 y_preprocessed_cm = df_preprocessed['Dementia_Label']
 
 num_features_preprocessed = X_preprocessed_cm.select_dtypes(include=[np.number]).columns
-# Scale
-scaler_preprocessed = StandardScaler()
-X_preprocessed_cm[num_features_preprocessed] = scaler_preprocessed.fit_transform(X_preprocessed_cm[num_features_preprocessed])
+
+if not num_features_preprocessed.empty: # Check if there are numerical features
+    scaler_preprocessed = StandardScaler()
+    X_preprocessed_cm[num_features_preprocessed] = scaler_preprocessed.fit_transform(X_preprocessed_cm[num_features_preprocessed])
 
 # --- Prediction for Preprocessed Data (using a simple heuristic for demonstration) ---
-X_preprocessed_cm['prediction'] = X_preprocessed_cm.apply(lambda x: 1 if x.sum() > x.shape[0] / 2 else 0, axis=1)
-
+if not X_preprocessed_cm.empty: # Check if X_preprocessed_cm has any columns
+    X_preprocessed_cm['prediction'] = X_preprocessed_cm.apply(lambda x: 1 if x.sum() > x.shape[0] / 2 else 0, axis=1)
+else:
+    X_preprocessed_cm['prediction'] = np.zeros(len(df_preprocessed)) # create a dummy prediction column if X_preprocessed_cm is empty
 
 # Section 1: Data Distribution Visualization (unchanged)
 # ... (rest of the code for data distribution, metrics, comparison, and insights)
@@ -82,52 +85,7 @@ fig_cm_preprocessed = px.imshow(cm_preprocessed, labels=dict(x="Predicted", y="A
                     title="Confusion Matrix (Preprocessed Data)")
 st.plotly_chart(fig_cm_preprocessed, use_container_width=True)
 
-# ... (rest of the code)v
-# Load JSON reports from strings (if available)
-try:
-    raw_report = json.loads(raw_report_json)
-    preprocessed_report = json.loads(preprocessed_report_json)
-except Exception as e:
-    st.error(f"Error parsing classification reports: {e}")
-    st.stop()
-
-# Display metrics for raw data (if report available)
-if raw_report:
-    st.write("### Training Metrics (Raw Data)")
-    raw_metrics = ["precision", "recall", "f1-score"]
-    raw_metric_data = {metric: [raw_report[str(i)][metric] for i in range(2)] for metric in raw_metrics}
-    raw_metric_data["Class"] = ["Class 0", "Class 1"]
-
-    raw_df_metrics = pd.DataFrame(raw_metric_data)
-    fig = px.bar(raw_df_metrics, x="Class", y=raw_metrics, barmode="group", title="Classification Metrics for Raw Data")
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Confusion Matrix for Raw data
-    cm_raw = confusion_matrix(df_raw['Dementia_Label'], (df_raw.drop(columns=['Patient_ID', 'Dementia_Label']).select_dtypes(include=[np.number]).fillna(0).apply(lambda x: 1 if x.sum() > x.shape[0] / 2 else 0, axis=1)))
-    fig_cm_raw = px.imshow(cm_raw, labels=dict(x="Predicted", y="Actual"),
-                        x=['No Dementia', 'Dementia'],
-                        y=['No Dementia', 'Dementia'],
-                        title="Confusion Matrix (Raw Data)")
-    st.plotly_chart(fig_cm_raw, use_container_width=True)
-
-# Display metrics for preprocessed data (if report available)
-if preprocessed_report:
-    st.write("### Training Metrics (Preprocessed Data)")
-    preprocessed_metrics = ["precision", "recall", "f1-score"]
-    preprocessed_metric_data = {metric: [preprocessed_report[str(i)][metric] for i in range(2)] for metric in preprocessed_metrics}
-    preprocessed_metric_data["Class"] = ["Class 0", "Class 1"]
-
-    preprocessed_df_metrics = pd.DataFrame(preprocessed_metric_data)
-    fig = px.bar(preprocessed_df_metrics, x="Class", y=preprocessed_metrics, barmode="group", title="Classification Metrics for Preprocessed Data")
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Confusion Matrix for Preprocessed data
-    cm_preprocessed = confusion_matrix(df_preprocessed['Dementia_Label'], (df_preprocessed.drop(columns=['Patient_ID', 'Dementia_Label']).select_dtypes(include=[np.number]).apply(lambda x: 1 if x.sum() > x.shape[0] / 2 else 0, axis=1)))
-    fig_cm_preprocessed = px.imshow(cm_preprocessed, labels=dict(x="Predicted", y="Actual"),
-                        x=['No Dementia', 'Dementia'],
-                        y=['No Dementia', 'Dementia'],
-                        title="Confusion Matrix (Preprocessed Data)")
-    st.plotly_chart(fig_cm_preprocessed, use_container_width=True)
+# ... (rest of the code)
 
 
 # Section 3: Model Comparison
