@@ -3,8 +3,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import json
-import numpy as np
 from sklearn.metrics import confusion_matrix
 from sklearn.ensemble import RandomForestClassifier
 
@@ -52,20 +50,18 @@ y_pred = model.predict(X_preprocessed)
 # Compute confusion matrix
 cm = confusion_matrix(y_preprocessed, y_pred)
 
-# Visualization of the confusion matrix
-fig = go.Figure(data=go.Heatmap(z=cm, x=['Class 0', 'Class 1'], y=['Class 0', 'Class 1'],
-                                colorscale='Viridis', colorbar=dict(title='Count')))
-fig.update_layout(title='Confusion Matrix', xaxis_title='Predicted', yaxis_title='Actual')
-st.plotly_chart(fig)
+# Handle cases where the confusion matrix may have zero values
+def safe_divide(numerator, denominator):
+    return numerator / denominator if denominator != 0 else 0
 
-# Calculate precision, recall, F1-score from the confusion matrix
-precision_class_0 = cm[0, 0] / (cm[0, 0] + cm[0, 1])  # TP / (TP + FP)
-precision_class_1 = cm[1, 1] / (cm[1, 1] + cm[1, 0])  # TP / (TP + FP)
-recall_class_0 = cm[0, 0] / (cm[0, 0] + cm[1, 0])  # TP / (TP + FN)
-recall_class_1 = cm[1, 1] / (cm[1, 1] + cm[0, 1])  # TP / (TP + FN)
-f1_class_0 = 2 * (precision_class_0 * recall_class_0) / (precision_class_0 + recall_class_0)
-f1_class_1 = 2 * (precision_class_1 * recall_class_1) / (precision_class_1 + recall_class_1)
-accuracy = (cm[0, 0] + cm[1, 1]) / cm.sum()
+# Calculate precision, recall, F1-score with safety for division by zero
+precision_class_0 = safe_divide(cm[0, 0], cm[0, 0] + cm[0, 1])  # TP / (TP + FP)
+precision_class_1 = safe_divide(cm[1, 1], cm[1, 1] + cm[1, 0])  # TP / (TP + FP)
+recall_class_0 = safe_divide(cm[0, 0], cm[0, 0] + cm[1, 0])  # TP / (TP + FN)
+recall_class_1 = safe_divide(cm[1, 1], cm[1, 1] + cm[0, 1])  # TP / (TP + FN)
+f1_class_0 = safe_divide(2 * (precision_class_0 * recall_class_0), (precision_class_0 + recall_class_0))  # F1
+f1_class_1 = safe_divide(2 * (precision_class_1 * recall_class_1), (precision_class_1 + recall_class_1))  # F1
+accuracy = safe_divide((cm[0, 0] + cm[1, 1]), cm.sum())
 
 # Display precision, recall, and F1-score metrics
 st.write(f"### Metrics based on Confusion Matrix")
