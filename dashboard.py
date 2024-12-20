@@ -3,14 +3,15 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import json
+import numpy as np
 from sklearn.metrics import confusion_matrix
-
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
 
 # Load datasets
 raw_data_path = "https://raw.githubusercontent.com/amithisnew/FDS_VA/refs/heads/main/raw_data_dementia.csv"
 preprocessed_data_path = "https://raw.githubusercontent.com/amithisnew/FDS_VA/refs/heads/main/preprocessed_data_dementia.csv"
 
-# Read raw and preprocessed data
 try:
     df_raw = pd.read_csv(raw_data_path)
     df_preprocessed = pd.read_csv(preprocessed_data_path)
@@ -22,42 +23,66 @@ except Exception as e:
 st.title("Dementia Prediction System Dashboard")
 st.sidebar.title("Options")
 
-# Section 1: Data Distribution Visualization
-st.header("1. Data Distribution Visualization")
+# --- Preprocessing for Raw Data (for Confusion Matrix) ---
+X_raw = df_raw.drop(columns=['Patient_ID', 'Dementia_Label'])
+y_raw = df_raw['Dementia_Label']
 
-data_selection = st.sidebar.radio("Choose data to display:", ("Raw Data", "Preprocessed Data"))
-selected_data = df_raw if data_selection == "Raw Data" else df_preprocessed
+num_features_raw = X_raw.select_dtypes(include=[np.number]).columns
+cat_features_raw = X_raw.select_dtypes(include=[object]).columns
 
-st.write(f"### {data_selection} Distribution")
-for col in selected_data.select_dtypes(include=["object", "int64", "float64"]).columns:
-    fig = px.histogram(selected_data, x=col, title=f"Distribution of {col}")
-    st.plotly_chart(fig, use_container_width=True)
+# Impute
+num_imputer_raw = SimpleImputer(strategy='median')
+X_raw[num_features_raw] = num_imputer_raw.fit_transform(X_raw[num_features_raw])
+cat_imputer_raw = SimpleImputer(strategy='most_frequent')
+X_raw[cat_features_raw] = cat_imputer_raw.fit_transform(X_raw[cat_features_raw])
 
-# Section 2: Model Performance Metrics
-st.header("2. Model Performance Metrics")
+# Scale
+scaler_raw = StandardScaler()
+X_raw[num_features_raw] = scaler_raw.fit_transform(X_raw[num_features_raw])
 
-# Classification report for raw data (assuming you have it)
-raw_report_json = """
-{
-    "0": {"precision": 0.73, "recall": 0.98, "f1-score": 0.84, "support": 332},
-    "1": {"precision": 0.50, "recall": 0.05, "f1-score": 0.09, "support": 127},
-    "accuracy": 0.7233115468409586,
-    "macro avg": {"precision": 0.61, "recall": 0.51, "f1-score": 0.46, "support": 459},
-    "weighted avg": {"precision": 0.67, "recall": 0.72, "f1-score": 0.63, "support": 459}
-}
-"""
+# Encode
+encoder_raw = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+X_encoded_raw = pd.DataFrame(encoder_raw.fit_transform(X_raw[cat_features_raw]), columns=encoder_raw.get_feature_names_out(cat_features_raw))
+X_raw = X_raw.drop(cat_features_raw, axis=1)
+X_raw = pd.concat([X_raw, X_encoded_raw], axis=1)
 
-# Classification report for preprocessed data (assuming you have it)
-preprocessed_report_json = """
-{
-    "0": {"precision": 0.78, "recall": 0.87, "f1-score": 0.82, "support": 343},
-    "1": {"precision": 0.84, "recall": 0.75, "f1-score": 0.79, "support": 326},
-    "accuracy": 0.8071748878923767,
-    "macro avg": {"precision": 0.81, "recall": 0.81, "f1-score": 0.81, "support": 669},
-    "weighted avg": {"precision": 0.81, "recall": 0.81, "f1-score": 0.81, "support": 669}
-}
-"""
 
+# --- Prediction for Raw Data (using a simple heuristic for demonstration) ---
+X_raw['prediction'] = X_raw.apply(lambda x: 1 if x.sum() > x.shape[0] / 2 else 0, axis=1)
+
+# --- Preprocessing for Preprocessed Data (for Confusion Matrix) ---
+X_preprocessed_cm = df_preprocessed.drop(columns=['Patient_ID', 'Dementia_Label'])
+y_preprocessed_cm = df_preprocessed['Dementia_Label']
+
+num_features_preprocessed = X_preprocessed_cm.select_dtypes(include=[np.number]).columns
+# Scale
+scaler_preprocessed = StandardScaler()
+X_preprocessed_cm[num_features_preprocessed] = scaler_preprocessed.fit_transform(X_preprocessed_cm[num_features_preprocessed])
+
+# --- Prediction for Preprocessed Data (using a simple heuristic for demonstration) ---
+X_preprocessed_cm['prediction'] = X_preprocessed_cm.apply(lambda x: 1 if x.sum() > x.shape[0] / 2 else 0, axis=1)
+
+
+# Section 1: Data Distribution Visualization (unchanged)
+# ... (rest of the code for data distribution, metrics, comparison, and insights)
+
+# Confusion Matrix for Raw data
+cm_raw = confusion_matrix(y_raw, X_raw['prediction'])
+fig_cm_raw = px.imshow(cm_raw, labels=dict(x="Predicted", y="Actual"),
+                    x=['No Dementia', 'Dementia'],
+                    y=['No Dementia', 'Dementia'],
+                    title="Confusion Matrix (Raw Data)")
+st.plotly_chart(fig_cm_raw, use_container_width=True)
+
+# Confusion Matrix for Preprocessed data
+cm_preprocessed = confusion_matrix(y_preprocessed_cm, X_preprocessed_cm['prediction'])
+fig_cm_preprocessed = px.imshow(cm_preprocessed, labels=dict(x="Predicted", y="Actual"),
+                    x=['No Dementia', 'Dementia'],
+                    y=['No Dementia', 'Dementia'],
+                    title="Confusion Matrix (Preprocessed Data)")
+st.plotly_chart(fig_cm_preprocessed, use_container_width=True)
+
+# ... (rest of the code)v
 # Load JSON reports from strings (if available)
 try:
     raw_report = json.loads(raw_report_json)
